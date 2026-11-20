@@ -20,4 +20,5 @@ desktop.ini
 # Lain-lain
 *.log
 coverage.out
+*.test
 ~$*

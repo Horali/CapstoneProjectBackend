@@ -1,0 +1,103 @@
+# Docker Compose untuk satu tim MyIF Capstone. Salin ke akar repo, sejajar dengan Dockerfile.
+#
+#   docker compose up -d --build --wait      # bangun dan jalankan aplikasi + database
+#   docker compose logs -f app                # lihat log aplikasi
+#   docker compose down                       # matikan, DATA TETAP ADA (di volume)
+#   docker compose down -v                    # matikan DAN hapus data (skrip db/migrations dijalankan ulang)
+#
+#   docker compose --profile test up -d --wait db_test     # database khusus tes integrasi
+#   docker compose --profile frontend up -d frontend       # sajikan frontend hasil build (./frontend/dist)
+#
+# Semua angka port, nama proyek, dan kata sandi dibaca dari berkas .env (lihat .env.example).
+# JANGAN menulis angka port langsung di berkas ini: itulah yang membuat tim bentrok di server bersama.
+
+name: ${COMPOSE_PROJECT_NAME:?Salin env/<tim>.env dari koordinator menjadi .env di akar repo}
+
+services:
+  db:
+    image: postgres:16-alpine # versi mayor dipatok, bukan "latest"
+    container_name: ${COMPOSE_PROJECT_NAME}-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
+      POSTGRES_DB: ${DB_NAME:?}
+    ports:
+      # host:container. Sisi container SELALU 5432; sisi host milik tim ini. Hanya 127.0.0.1.
+      - "${DB_BIND:-127.0.0.1}:${DB_PORT:?}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Skrip *.sql dijalankan berurutan menurut nama berkas, HANYA saat volume masih kosong.
+      # Mengubah skrip? Jalankan "docker compose down -v" lalu "up" lagi (data lokal hilang).
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # "up" hanya berarti container jalan, BUKAN Postgres siap menerima koneksi.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      args:
+        GO_VERSION: ${GO_VERSION:-1.23}
+        MAIN_PKG: ${MAIN_PKG:-./cmd/server}
+    container_name: ${COMPOSE_PROJECT_NAME}-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8080" # port DI DALAM container; selalu 8080
+      # Dari dalam jaringan Compose, database dijangkau lewat nama layanan "db" dan port 5432,
+      # BUKAN lewat localhost dan BUKAN lewat DB_PORT (itu hanya untuk akses dari luar/laptop).
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      TZ: Asia/Jakarta
+    ports:
+      - "${APP_PORT:?}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # Database terpisah untuk tes integrasi (tantangan T1 dan tes transaksi/konkurensi), agar tes
+  # tidak menghapus data pengembangan. Data di memori (tmpfs): hilang saat container dimatikan.
+  db_test:
+    profiles: ["test"]
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}-db-test
+    environment:
+      POSTGRES_USER: ${DB_USER:?}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
+      POSTGRES_DB: ${DB_NAME:?}_test
+    command: ["postgres", "-c", "fsync=off"] # lebih cepat; aman karena hanya untuk tes
+    ports:
+      - "${DB_BIND:-127.0.0.1}:${TEST_DB_PORT:?}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # Menyajikan hasil build frontend (mahasiswa frontend menaruhnya di ./frontend/dist).
+  frontend:
+    profiles: ["frontend"]
+    image: nginx:1.27-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}-frontend
+    restart: unless-stopped
+    ports:
+      - "${FE_PORT:?}:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+
+volumes:
+  db_data:
