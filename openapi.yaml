@@ -1,0 +1,5 @@
+openapi: 3.0.3
+info:
+  title: MyIF Capstone - Modul 2 Pembentukan Kelompok dan Evaluasi (Tim 2-A)
+  version: 0.1.0
+paths: {}
