@@ -1,0 +1,23 @@
+# Rahasia: hanya .env.example yang boleh masuk repo
+.env
+*.env
+!.env.example
+
+# Hasil build dan dependensi
+/bin/
+/dist/
+/build/
+node_modules/
+frontend/dist/
+
+# Editor dan OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Lain-lain
+*.log
+coverage.out
+~$*
