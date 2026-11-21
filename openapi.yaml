@@ -2,4 +2,1101 @@ openapi: 3.0.3
 info:
   title: MyIF Capstone - Modul 2 Pembentukan Kelompok dan Evaluasi (Tim 2-A)
   version: 0.1.0
-paths: {}
+  description: |
+    Kontrak API Modul 2 (Tim 2-A, jalur T2 Keamanan). Isi berkas ini sama dengan bagian E3 proposal.
+    Konvensi mengikuti Kamus Data Bersama: prefiks /api/v1, JSON, field snake_case,
+    format error { "error": { "kode", "pesan", "detail" } }, dan pagination halaman/per_halaman.
+servers:
+  - url: http://localhost:8103
+    description: Lokal (port aplikasi Tim 2-A)
+security:
+  - bearerAuth: []
+tags:
+  - name: dasar
+  - name: mahasiswa
+  - name: kelompok
+  - name: bimbingan
+  - name: evaluasi
+
+paths:
+  /healthz:
+    get:
+      tags: [dasar]
+      summary: Memeriksa kondisi aplikasi dan koneksi database
+      operationId: healthz
+      security: []
+      x-kebutuhan: BASE-09
+      responses:
+        '200':
+          description: Aplikasi dan database sehat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+        '503':
+          description: Database tidak dapat dihubungi
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/auth/login:
+    post:
+      tags: [dasar]
+      summary: Login dengan NRP atau kode_dosen dan password
+      operationId: login
+      security: []
+      x-kebutuhan: BASE-01
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/PermintaanRusak' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+        '429':
+          description: Akun terkunci sementara setelah 3 kali gagal login
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { kode: TERLALU_BANYAK_PERMINTAAN, pesan: Akun dikunci sementara, coba lagi nanti }
+
+  /api/v1/auth/ganti-sandi:
+    post:
+      tags: [dasar]
+      summary: Mengganti password (wajib saat login pertama)
+      operationId: gantiSandi
+      x-kebutuhan: BASE-01
+      x-peran: [mahasiswa, dosen, koordinator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sandi_lama, sandi_baru]
+              properties:
+                sandi_lama: { type: string }
+                sandi_baru: { type: string, minLength: 8 }
+      responses:
+        '204': { description: Password berhasil diganti }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+
+  /api/v1/saya:
+    get:
+      tags: [dasar]
+      summary: Data akun yang sedang login
+      operationId: saya
+      x-kebutuhan: BASE-01
+      x-peran: [mahasiswa, dosen, koordinator]
+      responses:
+        '200':
+          description: Data akun
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Akun' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+
+  /api/v1/mahasiswa/impor:
+    post:
+      tags: [mahasiswa]
+      summary: Mengimpor mahasiswa dari CSV (nrp,nama,email,angkatan)
+      operationId: imporMahasiswa
+      x-kebutuhan: M2-01
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: { type: string }
+      responses:
+        '200':
+          description: Laporan impor (baris valid diproses, baris rusak dilaporkan)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaporanImpor' }
+        '400': { $ref: '#/components/responses/PermintaanRusak' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+
+  /api/v1/mahasiswa:
+    get:
+      tags: [mahasiswa]
+      summary: Daftar mahasiswa beserta minatnya (bisa disaring yang belum berkelompok)
+      operationId: daftarMahasiswa
+      x-kebutuhan: M2-04, M2-14
+      x-peran: [koordinator]
+      parameters:
+        - $ref: '#/components/parameters/Periode'
+        - name: belum_berkelompok
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Halaman'
+        - $ref: '#/components/parameters/PerHalaman'
+      responses:
+        '200':
+          description: Daftar mahasiswa
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Halaman'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Mahasiswa' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+
+  /api/v1/dosen:
+    get:
+      tags: [mahasiswa]
+      summary: Daftar dosen untuk dipilih sebagai pembimbing
+      operationId: daftarDosen
+      x-kebutuhan: M2-05
+      x-peran: [koordinator]
+      parameters:
+        - $ref: '#/components/parameters/Halaman'
+        - $ref: '#/components/parameters/PerHalaman'
+      responses:
+        '200':
+          description: Daftar dosen
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Halaman'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Dosen' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+
+  /api/v1/periode/{periode}/pengaturan:
+    parameters:
+      - name: periode
+        in: path
+        required: true
+        schema: { type: string, pattern: '^\d{4}-[12]$', example: 2026-1 }
+    get:
+      tags: [kelompok]
+      summary: Melihat batas ukuran kelompok pada satu periode
+      operationId: lihatPengaturan
+      x-kebutuhan: M2-04
+      x-peran: [koordinator]
+      responses:
+        '200':
+          description: Pengaturan periode
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pengaturan' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+    put:
+      tags: [kelompok]
+      summary: Mengubah batas ukuran kelompok pada satu periode
+      operationId: ubahPengaturan
+      x-kebutuhan: M2-04
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Pengaturan' }
+      responses:
+        '200':
+          description: Pengaturan tersimpan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pengaturan' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+
+  /api/v1/kelompok:
+    post:
+      tags: [kelompok]
+      summary: Membuat kelompok draf
+      operationId: buatKelompok
+      x-kebutuhan: M2-02
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KelompokBaru' }
+      responses:
+        '201':
+          description: Kelompok dibuat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Kelompok' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+        '409':
+          description: KODE_KELOMPOK_SUDAH_ADA
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { kode: KODE_KELOMPOK_SUDAH_ADA, pesan: Kode kelompok sudah dipakai }
+    get:
+      tags: [kelompok]
+      summary: Ringkasan semua kelompok (jumlah anggota, kurang atau lebih dari batas)
+      operationId: daftarKelompok
+      x-kebutuhan: M2-04
+      x-peran: [koordinator]
+      parameters:
+        - $ref: '#/components/parameters/Periode'
+        - $ref: '#/components/parameters/Halaman'
+        - $ref: '#/components/parameters/PerHalaman'
+      responses:
+        '200':
+          description: Daftar ringkasan kelompok
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Halaman'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/RingkasanKelompok' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+
+  /api/v1/kelompok/{kode_kelompok}:
+    parameters:
+      - $ref: '#/components/parameters/KodeKelompok'
+    get:
+      tags: [kelompok]
+      summary: Detail satu kelompok beserta anggotanya
+      operationId: detailKelompok
+      x-kebutuhan: M2-04
+      x-peran: [koordinator]
+      responses:
+        '200':
+          description: Detail kelompok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Kelompok' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+    patch:
+      tags: [kelompok]
+      summary: Mengganti nama, pembimbing, atau ketua kelompok
+      operationId: ubahKelompok
+      x-kebutuhan: M2-02, M2-05
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nama: { type: string, minLength: 1, maxLength: 100 }
+                pembimbing: { type: string, description: kode_dosen }
+                ketua_nrp: { type: string, nullable: true, pattern: '^\d{10}$' }
+      responses:
+        '200':
+          description: Kelompok diperbarui
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Kelompok' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+        '409':
+          description: KETUA_BUKAN_ANGGOTA
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { kode: KETUA_BUKAN_ANGGOTA, pesan: Ketua harus anggota kelompok ini }
+    delete:
+      tags: [kelompok]
+      summary: Menghapus kelompok yang masih draf
+      operationId: hapusKelompok
+      x-kebutuhan: M2-02
+      x-peran: [koordinator]
+      responses:
+        '204': { description: Kelompok dihapus }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '409':
+          description: KELOMPOK_SUDAH_TERBIT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { kode: KELOMPOK_SUDAH_TERBIT, pesan: Hanya kelompok draf yang boleh dihapus }
+
+  /api/v1/kelompok/{kode_kelompok}/anggota:
+    parameters:
+      - $ref: '#/components/parameters/KodeKelompok'
+    post:
+      tags: [kelompok]
+      summary: Menempatkan satu atau beberapa mahasiswa ke kelompok
+      operationId: tambahAnggota
+      x-kebutuhan: M2-03
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nrp]
+              properties:
+                nrp:
+                  type: array
+                  minItems: 1
+                  items: { type: string, pattern: '^\d{10}$' }
+                alasan: { type: string, description: Wajib bila kelompok sudah terbit }
+      responses:
+        '200':
+          description: Anggota ditambahkan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Kelompok' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+        '409':
+          description: KELOMPOK_PENUH, SUDAH_BERKELOMPOK, atau PUTARAN_BERJALAN
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                penuh: { value: { error: { kode: KELOMPOK_PENUH, pesan: Kelompok sudah mencapai ukuran maksimal } } }
+                sudahBerkelompok: { value: { error: { kode: SUDAH_BERKELOMPOK, pesan: Mahasiswa sudah memiliki kelompok pada periode ini } } }
+                putaranBerjalan: { value: { error: { kode: PUTARAN_BERJALAN, pesan: Anggota tidak dapat diubah selama putaran evaluasi terbuka } } }
+
+  /api/v1/keanggotaan/pindah:
+    post:
+      tags: [kelompok]
+      summary: Memindahkan mahasiswa antar-kelompok (atomik)
+      operationId: pindahAnggota
+      x-kebutuhan: M2-03, M2-08
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nrp, ke_kelompok]
+              properties:
+                nrp: { type: string, pattern: '^\d{10}$' }
+                ke_kelompok: { type: string, description: kode_kelompok tujuan }
+                alasan: { type: string, description: Wajib bila kelompok sudah terbit }
+      responses:
+        '200':
+          description: Mahasiswa dipindahkan dan tercatat di riwayat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Riwayat' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+        '409':
+          description: KELOMPOK_PENUH atau PUTARAN_BERJALAN (mahasiswa tetap di kelompok asal)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                penuh: { value: { error: { kode: KELOMPOK_PENUH, pesan: Kelompok tujuan sudah penuh } } }
+                putaranBerjalan: { value: { error: { kode: PUTARAN_BERJALAN, pesan: Anggota tidak dapat diubah selama putaran evaluasi terbuka } } }
+
+  /api/v1/kelompok/{kode_kelompok}/anggota/{nrp}:
+    parameters:
+      - $ref: '#/components/parameters/KodeKelompok'
+      - name: nrp
+        in: path
+        required: true
+        schema: { type: string, pattern: '^\d{10}$' }
+    delete:
+      tags: [kelompok]
+      summary: Mengeluarkan mahasiswa dari kelompok
+      operationId: keluarkanAnggota
+      x-kebutuhan: M2-03, M2-08
+      x-peran: [koordinator]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alasan: { type: string, description: Wajib bila kelompok sudah terbit }
+      responses:
+        '204': { description: Mahasiswa dikeluarkan dan tercatat di riwayat }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+        '409':
+          description: PUTARAN_BERJALAN
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { kode: PUTARAN_BERJALAN, pesan: Anggota tidak dapat diubah selama putaran evaluasi terbuka }
+
+  /api/v1/kelompok/{kode_kelompok}/riwayat:
+    parameters:
+      - $ref: '#/components/parameters/KodeKelompok'
+    get:
+      tags: [kelompok]
+      summary: Riwayat perubahan keanggotaan kelompok
+      operationId: riwayatKelompok
+      x-kebutuhan: M2-08
+      x-peran: [koordinator]
+      parameters:
+        - $ref: '#/components/parameters/Halaman'
+        - $ref: '#/components/parameters/PerHalaman'
+      responses:
+        '200':
+          description: Daftar riwayat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Halaman'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Riwayat' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+
+  /api/v1/kelompok/terbitkan:
+    post:
+      tags: [kelompok]
+      summary: Menerbitkan semua kelompok draf sekaligus (atomik)
+      operationId: terbitkanKelompok
+      x-kebutuhan: M2-06
+      x-peran: [koordinator]
+      parameters:
+        - $ref: '#/components/parameters/Periode'
+      responses:
+        '200':
+          description: Semua kelompok draf terbit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jumlah_terbit: { type: integer }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '409':
+          description: SYARAT_PENERBITAN_TIDAK_TERPENUHI (tidak ada kelompok yang terbit)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error:
+                  kode: SYARAT_PENERBITAN_TIDAK_TERPENUHI
+                  pesan: Ada kelompok yang belum memenuhi syarat
+                  detail:
+                    CP-2026-1-03: [jumlah anggota kurang dari ukuran_min]
+                    CP-2026-1-05: [pembimbing belum ditetapkan]
+
+  /api/v1/kelompok/ekspor:
+    get:
+      tags: [kelompok]
+      summary: Mengekspor kelompok terbit sebagai CSV
+      operationId: eksporKelompok
+      x-kebutuhan: M2-09
+      x-peran: [koordinator]
+      parameters:
+        - $ref: '#/components/parameters/Periode'
+      responses:
+        '200':
+          description: CSV dengan kolom kode_kelompok,nama,pembimbing,nrp
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+
+  /api/v1/kelompok-saya:
+    get:
+      tags: [kelompok]
+      summary: Kelompok milik mahasiswa yang login (hanya setelah terbit)
+      operationId: kelompokSaya
+      x-kebutuhan: M2-07
+      x-peran: [mahasiswa]
+      responses:
+        '200':
+          description: Kelompok dan anggotanya
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KelompokPublik' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+
+  /api/v1/bimbingan:
+    get:
+      tags: [bimbingan]
+      summary: Daftar kelompok terbit yang dibimbing dosen yang login
+      operationId: daftarBimbingan
+      x-kebutuhan: M2-07
+      x-peran: [dosen]
+      responses:
+        '200':
+          description: Daftar kelompok bimbingan
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/KelompokPublik' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+
+  /api/v1/bimbingan/{kode_kelompok}:
+    parameters:
+      - $ref: '#/components/parameters/KodeKelompok'
+    get:
+      tags: [bimbingan]
+      summary: Detail satu kelompok bimbingan
+      operationId: detailBimbingan
+      x-kebutuhan: M2-07
+      x-peran: [dosen]
+      responses:
+        '200':
+          description: Detail kelompok bimbingan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KelompokPublik' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+
+  /api/v1/putaran-evaluasi:
+    post:
+      tags: [evaluasi]
+      summary: Membuka putaran evaluasi
+      operationId: bukaPutaran
+      x-kebutuhan: M2-10
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nama, periode]
+              properties:
+                nama: { type: string, minLength: 1, maxLength: 100 }
+                periode: { type: string, example: 2026-1 }
+      responses:
+        '201':
+          description: Putaran dibuka
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PutaranEvaluasi' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+    get:
+      tags: [evaluasi]
+      summary: Daftar putaran evaluasi
+      operationId: daftarPutaran
+      x-kebutuhan: M2-10
+      x-peran: [mahasiswa, dosen, koordinator]
+      parameters:
+        - $ref: '#/components/parameters/Halaman'
+        - $ref: '#/components/parameters/PerHalaman'
+      responses:
+        '200':
+          description: Daftar putaran
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Halaman'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PutaranEvaluasi' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+
+  /api/v1/putaran-evaluasi/{id}/tutup:
+    parameters:
+      - $ref: '#/components/parameters/IdPutaran'
+    post:
+      tags: [evaluasi]
+      summary: Menutup putaran evaluasi
+      operationId: tutupPutaran
+      x-kebutuhan: M2-10
+      x-peran: [koordinator]
+      responses:
+        '200':
+          description: Putaran ditutup
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PutaranEvaluasi' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '409': { $ref: '#/components/responses/PutaranDitutup' }
+
+  /api/v1/putaran-evaluasi/{id}/formulir:
+    parameters:
+      - $ref: '#/components/parameters/IdPutaran'
+    get:
+      tags: [evaluasi]
+      summary: Daftar anggota yang harus dinilai oleh mahasiswa yang login
+      operationId: formulirEvaluasi
+      x-kebutuhan: M2-11
+      x-peran: [mahasiswa]
+      responses:
+        '200':
+          description: Anggota kelompok selain diri sendiri
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  putaran: { $ref: '#/components/schemas/PutaranEvaluasi' }
+                  target:
+                    type: array
+                    items: { $ref: '#/components/schemas/AnggotaRingkas' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '409': { $ref: '#/components/responses/PutaranDitutup' }
+
+  /api/v1/putaran-evaluasi/{id}/evaluasi-saya:
+    parameters:
+      - $ref: '#/components/parameters/IdPutaran'
+    put:
+      tags: [evaluasi]
+      summary: Mengirim evaluasi untuk semua anggota lain sekaligus (boleh dikirim ulang selama putaran terbuka)
+      operationId: kirimEvaluasi
+      x-kebutuhan: M2-11
+      x-peran: [mahasiswa]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [evaluasi]
+              properties:
+                evaluasi:
+                  type: array
+                  minItems: 1
+                  items: { $ref: '#/components/schemas/EvaluasiMasukan' }
+      responses:
+        '200':
+          description: Evaluasi tersimpan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jumlah_dinilai: { type: integer }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+        '409': { $ref: '#/components/responses/PutaranDitutup' }
+
+  /api/v1/putaran-evaluasi/{id}/ringkasan-saya:
+    parameters:
+      - $ref: '#/components/parameters/IdPutaran'
+    get:
+      tags: [evaluasi]
+      summary: Ringkasan evaluasi diri sendiri (tanpa identitas penilai)
+      operationId: ringkasanSaya
+      x-kebutuhan: M2-12
+      x-peran: [mahasiswa]
+      responses:
+        '200':
+          description: Rata-rata per kriteria dan komentar anonim
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RingkasanEvaluasi' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '409':
+          description: RINGKASAN_BELUM_TERSEDIA (putaran belum ditutup atau penilai kurang dari 2)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { kode: RINGKASAN_BELUM_TERSEDIA, pesan: Ringkasan tersedia setelah putaran ditutup dan minimal 2 penilai }
+
+  /api/v1/putaran-evaluasi/{id}/rekap:
+    parameters:
+      - $ref: '#/components/parameters/IdPutaran'
+    get:
+      tags: [evaluasi]
+      summary: Rekap evaluasi per anggota, termasuk yang belum mengisi dan penanda timpang
+      description: Koordinator melihat semua kelompok; dosen hanya kelompok bimbingannya.
+      operationId: rekapEvaluasi
+      x-kebutuhan: M2-13, M2-15
+      x-peran: [koordinator, dosen]
+      parameters:
+        - name: kode_kelompok
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Rekap evaluasi
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RekapKelompok' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '404': { $ref: '#/components/responses/TidakDitemukan' }
+
+  /api/v1/minat/impor:
+    post:
+      tags: [mahasiswa]
+      summary: Mengimpor minat mahasiswa dari CSV (nrp,preferensi_peran,minat1,minat2,minat3)
+      operationId: imporMinat
+      x-kebutuhan: M2-14
+      x-peran: [koordinator]
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: { type: string }
+      responses:
+        '200':
+          description: Laporan impor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaporanImpor' }
+        '400': { $ref: '#/components/responses/PermintaanRusak' }
+        '401': { $ref: '#/components/responses/TidakTerautentikasi' }
+        '403': { $ref: '#/components/responses/Dilarang' }
+        '422': { $ref: '#/components/responses/ValidasiGagal' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Halaman:
+      name: halaman
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PerHalaman:
+      name: per_halaman
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Periode:
+      name: periode
+      in: query
+      description: Periode aktif bila tidak diisi
+      schema: { type: string, pattern: '^\d{4}-[12]$', example: 2026-1 }
+    KodeKelompok:
+      name: kode_kelompok
+      in: path
+      required: true
+      schema: { type: string, pattern: '^CP-\d{4}-[12]-\d{2}$', example: CP-2026-1-07 }
+    IdPutaran:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    PermintaanRusak:
+      description: PERMINTAAN_RUSAK (JSON atau CSV rusak, tipe salah)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { kode: PERMINTAAN_RUSAK, pesan: Format permintaan tidak dapat dibaca }
+    TidakTerautentikasi:
+      description: TIDAK_TERAUTENTIKASI (belum login atau token tidak valid)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { kode: TIDAK_TERAUTENTIKASI, pesan: Token tidak valid atau sudah kedaluwarsa }
+    Dilarang:
+      description: DILARANG (peran atau kepemilikan data tidak sesuai)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { kode: DILARANG, pesan: Anda tidak memiliki akses ke data ini }
+    TidakDitemukan:
+      description: TIDAK_DITEMUKAN
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { kode: TIDAK_DITEMUKAN, pesan: Data tidak ditemukan }
+    ValidasiGagal:
+      description: VALIDASI_GAGAL (isi melanggar aturan validasi)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              kode: VALIDASI_GAGAL
+              pesan: Data tidak valid
+              detail: { alasan: wajib diisi karena kelompok sudah terbit }
+    PutaranDitutup:
+      description: PUTARAN_DITUTUP
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: { kode: PUTARAN_DITUTUP, pesan: Putaran evaluasi sudah ditutup }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [kode, pesan]
+          properties:
+            kode: { type: string, example: VALIDASI_GAGAL }
+            pesan: { type: string }
+            detail: { type: object, additionalProperties: true }
+
+    Halaman:
+      type: object
+      properties:
+        halaman: { type: integer, example: 1 }
+        per_halaman: { type: integer, example: 20 }
+        total: { type: integer, example: 123 }
+
+    LoginRequest:
+      type: object
+      required: [identitas, sandi]
+      properties:
+        identitas: { type: string, description: NRP atau kode_dosen }
+        sandi: { type: string }
+
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        kedaluwarsa: { type: string, format: date-time }
+        harus_ganti_sandi: { type: boolean }
+        akun: { $ref: '#/components/schemas/Akun' }
+
+    Akun:
+      type: object
+      properties:
+        identitas: { type: string }
+        nama: { type: string }
+        peran: { type: string, enum: [mahasiswa, dosen, koordinator] }
+
+    LaporanImpor:
+      type: object
+      properties:
+        diproses: { type: integer, example: 42 }
+        berhasil: { type: integer, example: 40 }
+        gagal:
+          type: array
+          items:
+            type: object
+            properties:
+              baris: { type: integer, example: 7 }
+              alasan: { type: string, example: NRP harus 10 digit }
+
+    Mahasiswa:
+      type: object
+      description: ipk dan minat hanya dikirim ke koordinator
+      properties:
+        nrp: { type: string, pattern: '^\d{10}$' }
+        nama: { type: string }
+        email: { type: string, format: email }
+        angkatan: { type: integer }
+        ipk: { type: number, nullable: true }
+        kode_kelompok: { type: string, nullable: true }
+        minat:
+          type: array
+          items:
+            type: object
+            properties:
+              peringkat: { type: integer }
+              studi_kasus: { type: string }
+              peran: { type: string }
+
+    Dosen:
+      type: object
+      properties:
+        kode_dosen: { type: string }
+        nama: { type: string }
+        email: { type: string, format: email }
+
+    Pengaturan:
+      type: object
+      required: [ukuran_min, ukuran_maks]
+      properties:
+        periode: { type: string, readOnly: true, example: 2026-1 }
+        ukuran_min: { type: integer, minimum: 1, default: 3 }
+        ukuran_maks: { type: integer, minimum: 1, default: 4 }
+
+    KelompokBaru:
+      type: object
+      required: [kode_kelompok, nama]
+      properties:
+        kode_kelompok: { type: string, example: CP-2026-1-07 }
+        nama: { type: string, minLength: 1, maxLength: 100 }
+
+    AnggotaRingkas:
+      type: object
+      properties:
+        nrp: { type: string }
+        nama: { type: string }
+
+    Kelompok:
+      type: object
+      properties:
+        kode_kelompok: { type: string, example: CP-2026-1-07 }
+        periode: { type: string, example: 2026-1 }
+        nama: { type: string }
+        status: { type: string, enum: [draf, terbit] }
+        pembimbing: { type: string, nullable: true, description: kode_dosen }
+        ketua_nrp: { type: string, nullable: true }
+        anggota:
+          type: array
+          items: { $ref: '#/components/schemas/AnggotaRingkas' }
+
+    RingkasanKelompok:
+      type: object
+      properties:
+        kode_kelompok: { type: string }
+        nama: { type: string }
+        status: { type: string, enum: [draf, terbit] }
+        pembimbing: { type: string, nullable: true }
+        jumlah_anggota: { type: integer }
+        keterangan_ukuran: { type: string, enum: [kurang, sesuai, lebih] }
+
+    KelompokPublik:
+      type: object
+      description: Tampilan kelompok untuk mahasiswa dan dosen (tanpa IPK dan minat)
+      properties:
+        kode_kelompok: { type: string }
+        nama: { type: string }
+        pembimbing: { $ref: '#/components/schemas/Dosen' }
+        ketua_nrp: { type: string, nullable: true }
+        anggota:
+          type: array
+          items: { $ref: '#/components/schemas/AnggotaRingkas' }
+
+    Riwayat:
+      type: object
+      properties:
+        waktu: { type: string, format: date-time }
+        nrp: { type: string }
+        dari_kelompok: { type: string, nullable: true }
+        ke_kelompok: { type: string, nullable: true }
+        oleh: { type: string, description: identitas koordinator }
+        alasan: { type: string, nullable: true }
+
+    PutaranEvaluasi:
+      type: object
+      properties:
+        id: { type: integer }
+        periode: { type: string }
+        nama: { type: string }
+        dibuka: { type: string, format: date-time }
+        ditutup: { type: string, format: date-time, nullable: true }
+
+    EvaluasiMasukan:
+      type: object
+      required: [target_nrp, kontribusi_teknis, komunikasi, tanggung_jawab]
+      properties:
+        target_nrp: { type: string, pattern: '^\d{10}$' }
+        kontribusi_teknis: { type: integer, minimum: 1, maximum: 5 }
+        komunikasi: { type: integer, minimum: 1, maximum: 5 }
+        tanggung_jawab: { type: integer, minimum: 1, maximum: 5 }
+        komentar: { type: string, maxLength: 300 }
+
+    RingkasanEvaluasi:
+      type: object
+      description: Tidak pernah memuat identitas penilai
+      properties:
+        jumlah_penilai: { type: integer }
+        rata_rata:
+          type: object
+          properties:
+            kontribusi_teknis: { type: number }
+            komunikasi: { type: number }
+            tanggung_jawab: { type: number }
+        komentar:
+          type: array
+          items: { type: string }
+
+    RekapKelompok:
+      type: object
+      properties:
+        kode_kelompok: { type: string }
+        belum_mengisi:
+          type: array
+          items: { type: string, description: nrp }
+        kontribusi_timpang: { type: boolean, description: 'Selisih rata-rata antar-anggota lebih dari 1,0' }
+        anggota:
+          type: array
+          items:
+            type: object
+            properties:
+              nrp: { type: string }
+              nama: { type: string }
+              rata_rata:
+                type: object
+                properties:
+                  kontribusi_teknis: { type: number }
+                  komunikasi: { type: number }
+                  tanggung_jawab: { type: number }
+              penilaian:
+                type: array
+                description: Identitas penilai hanya untuk koordinator dan pembimbing
+                items:
+                  type: object
+                  properties:
+                    penilai_nrp: { type: string }
+                    kontribusi_teknis: { type: integer }
+                    komunikasi: { type: integer }
+                    tanggung_jawab: { type: integer }
+                    komentar: { type: string }
