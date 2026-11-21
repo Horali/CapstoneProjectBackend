@@ -2,16 +2,16 @@
 
 > **DRAF** (Minggu, 22 Nov 2026). Dipakai untuk E2, E3, E4, E5, E6, E9, F, dan `openapi.yaml`.
 > Sumber: Modul 2 bagian 3–5, rekaman wawancara 20 Nov, dan bagian 4 dokumen pembagian tugas.
-> Nama pengenal (nrp, kode_dosen, kode_kelompok) dan format error **harus dicek dengan Kamus Data Bersama** (berkasnya belum ada di repo).
+> Sudah dicocokkan dengan **Kamus Data Bersama** (folder dosen): nrp 10 digit, kode_kelompok `CP-<periode>-nn`, periode `TTTT-S`, login menggunakan NRP/kode_dosen, path diawali `/api/v1`. Daftar endpoint final ada di `docs/e3-kontrak-api.md`.
 
 ## 1. Daftar tabel
 
 | No | Tabel | Kolom utama | Aturan penting | Sumber |
 |----|-------|-------------|----------------|--------|
-| 1 | `pengguna` | id, email, kata_sandi_hash, peran (koordinator/dosen/mahasiswa), harus_ganti_sandi, gagal_login, terkunci_sampai | email UNIQUE; peran CHECK | BASE-01, wawancara (sandi default, kunci setelah 3x salah) |
+| 1 | `pengguna` | id, identitas (nrp atau kode_dosen), kata_sandi_hash (bcrypt), peran (koordinator/dosen/mahasiswa), harus_ganti_sandi, gagal_login, terkunci_sampai | identitas UNIQUE; peran CHECK. Login menggunakan identitas, bukan email (Kamus bagian 3) | BASE-01, Kamus, wawancara (sandi default, kunci setelah 3x salah) |
 | 2 | `mahasiswa` | nrp (PK), pengguna_id, nama, email, angkatan, ipk (boleh kosong) | IPK hanya boleh dilihat koordinator | M2-01, wawancara (IPK disimpan, CV tidak) |
 | 3 | `dosen` | kode_dosen (PK), pengguna_id, nama, email | asumsi: data dosen dari seed | modul bagian 2 |
-| 4 | `periode` | kode (PK, mis. 2026-gasal), nama, ukuran_min (default 3), ukuran_maks (default 4) | CHECK ukuran_min ≤ ukuran_maks. Gabungan "Periode" + "PengaturanKelompok" | modul bagian 3, wawancara (ukuran bisa diatur) |
+| 4 | `periode` | periode (PK, format TTTT-S mis. 2026-1), nama, ukuran_min (default 3), ukuran_maks (default 4) | CHECK ukuran_min ≤ ukuran_maks. Gabungan "Periode" + "PengaturanKelompok" | modul bagian 3, wawancara (ukuran bisa diatur) |
 | 5 | `kelompok` | kode_kelompok (PK), periode, nama, ketua_nrp (opsional), pembimbing (kode_dosen), status (draf/terbit) | status CHECK; FK ke dosen dan mahasiswa | modul bagian 3 |
 | 6 | `keanggotaan` | periode, nrp, kode_kelompok, peran_tim (opsional) | **PRIMARY KEY (periode, nrp)** → satu mahasiswa satu kelompok per periode, dijaga database | aturan bisnis 1, wawancara (tukar peran boleh) |
 | 7 | `riwayat_keanggotaan` | id, waktu, nrp, dari_kelompok, ke_kelompok, oleh (pengguna_id), alasan | hanya bertambah (tidak ada UPDATE/DELETE) | M2-08 |
@@ -21,7 +21,7 @@
 
 ## 2. Daftar endpoint
 
-Format: `METODE /path — peran — kebutuhan`. Semua kecuali login dan healthz butuh JWT.
+Format: `METODE /path — peran — kebutuhan`. Semua endpoint kecuali login dan healthz memerlukan JWT.
 
 ### Dasar
 | No | Endpoint | Peran | Kebutuhan |
@@ -70,6 +70,6 @@ Format: `METODE /path — peran — kebutuhan`. Semua kecuali login dan healthz 
 ## 3. Yang perlu dicek tim
 
 - Cocokkan nama kolom dan format error dengan **Kamus Data Bersama**.
-- Asal data dosen: seed (asumsi). Kalau kamus/koordinator punya format impor dosen, tambah endpoint impor dosen.
+- Data dosen berasal dari data seed `dosen.csv` yang disediakan dosen (Kamus bagian 6), sehingga tidak diperlukan endpoint impor dosen.
 - Koordinator dianggap satu akun dengan peran `koordinator` (bukan dosen biasa).
 - Kolom `mitra` di matriks E5: semua ✗ (modul ini tidak punya peran mitra).
