@@ -5,7 +5,7 @@ Team: Faiz (lead, Backend 1), Aisyahra "Ais" (Backend 2), Wulan (Backend 3 + Fro
 
 ## Active tasks
 
-- Evaluation revision of the proposal (due 2026-11-27 23:59) — `handoffs/evaluasi-revisi.md`
+- None.
 
 ## Key facts
 
@@ -15,6 +15,12 @@ Team: Faiz (lead, Backend 1), Aisyahra "Ais" (Backend 2), Wulan (Backend 3 + Fro
 - Shared conventions come from the Kamus Data Bersama: `/api/v1`, error `{error:{kode,pesan,detail}}`, login identity is NRP or a 2–10 char code.
 - Weeks: 1 = 17–23 Nov, 2 = 24–30 Nov, 3 = 1–7 Dec, 4 = 8–14 Dec.
 - Edit only your own sections in the Google Doc. Check for teammate edits before you rewrite a part.
+
+## Decisions after the dosen review (26 Nov 2026)
+
+- Roles: mahasiswa, dosen (pembimbing only), koordinator (dosen koordinator or asdos; table `koordinator`, login `kode_koordinator`).
+- Evaluation happens after the capstone. Each koordinator rates each mahasiswa once per putaran (3 criteria 1–5 + komentar). Mahasiswa sees averages without rater names after close; pembimbing sees rekap of own groups. M2-15 removed.
+- Still open (user side): Wulan redoes the E12 wireframe; export the PDF and resubmit.
 
 ## Where to look
 
