@@ -7,7 +7,8 @@
 
 - Semua path diawali `/api/v1`. Request dan response menggunakan JSON, dengan nama field `snake_case` berbahasa Indonesia.
 - ID yang muncul di API: `nrp` (10 digit), `kode_dosen`, `kode_kelompok` (`CP-<periode>-nn`, mis. `CP-2026-1-07`), `periode` (`TTTT-S`, mis. `2026-1`).
-- Login menggunakan **NRP atau kode_dosen dan password**. Token JWT HS256 berlaku selama 2 jam dan berisi `sub`, `peran`, serta `exp`.
+- Login menggunakan **NRP (mahasiswa), kode_dosen (dosen), atau kode_koordinator (koordinator: dosen koordinator atau asdos) dan password**. Token JWT HS256 berlaku selama 2 jam dan berisi `sub`, `peran`, serta `exp`.
+- **Revisi dosen (26 Nov 2026):** evaluasi tidak lagi antar-anggota. Setelah capstone selesai, koordinator menilai setiap mahasiswa. Endpoint 27–30 diubah sesuai revisi ini, dan M2-15 dihapus.
 - Endpoint yang mengembalikan daftar menggunakan pagination melalui query `halaman` dan `per_halaman` (default 20, maksimal 100).
 - Format error: `{ "error": { "kode": "...", "pesan": "...", "detail": { ... } } }`.
 - Kode error umum: 400 `PERMINTAAN_RUSAK`, 401 `TIDAK_TERAUTENTIKASI`, 403 `DILARANG`, 404 `TIDAK_DITEMUKAN`, 422 `VALIDASI_GAGAL`, 429 `TERLALU_BANYAK_PERMINTAAN`. Kode 409 khusus modul ini (lihat bawah). Input yang salah tidak boleh menghasilkan 500.
@@ -44,10 +45,10 @@ Semua endpoint selain login dan `/healthz` memerlukan token. Status 401 dikembal
 | 24 | POST | `/api/v1/putaran-evaluasi` | koordinator | M2-10 | 201 | 401, 403, 422 |
 | 25 | GET | `/api/v1/putaran-evaluasi` | semua | M2-10 | 200 | 401 |
 | 26 | POST | `/api/v1/putaran-evaluasi/{id}/tutup` | koordinator | M2-10 | 200 | 401, 403, 404, 409 `PUTARAN_DITUTUP` |
-| 27 | GET | `/api/v1/putaran-evaluasi/{id}/formulir` | mahasiswa | M2-11 | 200 (daftar anggota yang dinilai) | 401, 403, 404, 409 `PUTARAN_DITUTUP` |
-| 28 | PUT | `/api/v1/putaran-evaluasi/{id}/evaluasi-saya` | mahasiswa | M2-11 | 200 | 401, 403, 404, 422 (kurang satu anggota, menilai diri sendiri, skor di luar 1–5, komentar > 300 karakter), 409 `PUTARAN_DITUTUP` |
-| 29 | GET | `/api/v1/putaran-evaluasi/{id}/ringkasan-saya` | mahasiswa | M2-12 | 200 (rata-rata per kriteria + komentar, **tanpa identitas penilai**) | 401, 403, 404, 409 `RINGKASAN_BELUM_TERSEDIA` (putaran belum ditutup atau penilai < 2) |
-| 30 | GET | `/api/v1/putaran-evaluasi/{id}/rekap` | koordinator, dosen (kelompok bimbingan saja) | M2-13, M2-15 | 200 (belum mengisi, rekap per anggota, penanda timpang) | 401, 403, 404 |
+| 27 | GET | `/api/v1/putaran-evaluasi/{id}/formulir` | koordinator | M2-11 | 200 (daftar mahasiswa dan nilai dari penilai ini) | 401, 403, 404, 409 `PUTARAN_DITUTUP` |
+| 28 | PUT | `/api/v1/putaran-evaluasi/{id}/evaluasi/{nrp}` | koordinator | M2-11 | 200 | 401, 403, 404 (bukan anggota kelompok terbit), 422 (skor di luar 1–5, komentar > 300 karakter), 409 `PUTARAN_DITUTUP` |
+| 29 | GET | `/api/v1/putaran-evaluasi/{id}/hasil-saya` | mahasiswa | M2-12 | 200 (rata-rata per kriteria + komentar, **tanpa identitas penilai**) | 401, 403, 404, 409 `HASIL_BELUM_TERSEDIA` (putaran belum ditutup atau belum dinilai) |
+| 30 | GET | `/api/v1/putaran-evaluasi/{id}/rekap` | koordinator, dosen (kelompok bimbingan saja) | M2-13 | 200 (mahasiswa yang belum dinilai, rekap per mahasiswa) | 401, 403, 404 |
 | 31 | POST | `/api/v1/minat/impor` | koordinator | M2-14 | 200 (laporan impor) | 400, 401, 403, 422 |
 
 ## Kode 409 yang dipakai
@@ -62,14 +63,14 @@ Semua endpoint selain login dan `/healthz` memerlukan token. Status 401 dikembal
 | `KELOMPOK_SUDAH_TERBIT` | menghapus kelompok yang sudah terbit (hanya draf boleh dihapus) | usulan tim (M2-02) |
 | `KODE_KELOMPOK_SUDAH_ADA` | membuat kelompok dengan kode yang sudah dipakai | usulan tim |
 | `KETUA_BUKAN_ANGGOTA` | menetapkan ketua yang bukan anggota kelompok itu | usulan tim |
-| `RINGKASAN_BELUM_TERSEDIA` | ringkasan diminta sebelum putaran ditutup atau penilai kurang dari 2 | usulan tim (aturan 9) |
+| `HASIL_BELUM_TERSEDIA` | hasil evaluasi diminta sebelum putaran ditutup atau sebelum mahasiswa dinilai | usulan tim (revisi dosen) |
 
 ## Cek kelengkapan
 
-Semua kebutuhan Wajib (M2-01 s.d. M2-13) punya minimal satu endpoint. Sebaiknya: M2-14 (no. 31, ditampilkan di no. 6) dan M2-15 (no. 30).
+Semua kebutuhan Wajib (M2-01 s.d. M2-13) punya minimal satu endpoint. Sebaiknya: M2-14 (no. 31, ditampilkan di no. 6). M2-15 dihapus karena revisi dosen.
 
 ## Catatan desain (untuk dijelaskan saat demo)
 
-- Endpoint mahasiswa tidak menggunakan kode kelompok di path (`/kelompok-saya`, `/evaluasi-saya`), sehingga mahasiswa tidak dapat mengakses kelompok lain dengan mengganti ID (mencegah IDOR).
+- Endpoint mahasiswa tidak menggunakan kode kelompok di path (`/kelompok-saya`, `/hasil-saya`), sehingga mahasiswa tidak dapat mengakses kelompok lain dengan mengganti ID (mencegah IDOR).
 - Dosen hanya mengakses `/bimbingan/...`; server memeriksa bahwa kelompok tersebut merupakan kelompok bimbingannya, dan mengembalikan 403 jika bukan.
 - Pindah anggota dan terbitkan kelompok adalah operasi atomik (lihat E4).

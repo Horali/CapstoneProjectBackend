@@ -32,7 +32,7 @@
 | Pindah anggota: `nrp`, `ke_kelompok` | `nrp` 10 digit. `ke_kelompok` berpola `CP-TTTT-S-nn` dan berbeda dari kelompok asal. | 422 VALIDASI_GAGAL. Mahasiswa atau kelompok tidak ada: 404 TIDAK_DITEMUKAN. | Modul (M2-03, M2-08) |
 | `alasan` perubahan anggota | Wajib diisi (1–500 karakter) jika kelompok sudah terbit. Boleh kosong jika kelompok masih draf. | 422 VALIDASI_GAGAL | Modul aturan 6 |
 | Putaran evaluasi baru: `nama`, `periode` | `nama` 1–100 karakter. `periode` berpola `TTTT-S`. | 422 VALIDASI_GAGAL | Modul (M2-10) |
-| Evaluasi: daftar target | Harus menilai setiap anggota kelompok lain tepat satu kali. Tidak boleh menilai diri sendiri. Tidak boleh menilai mahasiswa di luar kelompok. | 422 VALIDASI_GAGAL | Modul aturan 7 |
+| Evaluasi: `nrp` target (path) | `nrp` 10 digit dan merupakan anggota kelompok yang sudah terbit pada periode putaran. Satu koordinator memiliki satu evaluasi per mahasiswa per putaran; pengiriman ulang menimpa nilai sebelumnya selama putaran terbuka. | 404 TIDAK_DITEMUKAN (bukan anggota kelompok terbit) | Revisi dosen (26 Nov 2026) |
 | Evaluasi: skor | `kontribusi_teknis`, `komunikasi`, dan `tanggung_jawab` wajib diisi dengan bilangan bulat 1–5. | 422 VALIDASI_GAGAL | Modul (M2-11) |
 | Evaluasi: `komentar` | Opsional, maksimal 300 karakter. | 422 VALIDASI_GAGAL | Modul (M2-11) |
 | Pagination: `halaman`, `per_halaman` | `halaman` minimal 1. `per_halaman` 1–100 (default 20). | 422 VALIDASI_GAGAL | Kamus |
