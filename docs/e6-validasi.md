@@ -19,7 +19,7 @@
 
 | Masukan | Aturan validasi | Status dan kode galat | Sumber |
 |---|---|---|---|
-| Login: `identitas`, `sandi` | Keduanya wajib diisi. `identitas` berupa NRP (10 digit) atau `kode_dosen` (2–10 huruf/angka). | 422 VALIDASI_GAGAL. Identitas atau password salah: 401 TIDAK_TERAUTENTIKASI dengan pesan yang sama untuk keduanya. Setelah 3 kali gagal: 429 TERLALU_BANYAK_PERMINTAAN selama 15 menit. | Kamus, keputusan tim |
+| Login: `identitas`, `sandi` | Keduanya wajib diisi. `identitas` berupa NRP (10 digit), `kode_dosen`, atau `kode_koordinator` (2–10 huruf/angka). | 422 VALIDASI_GAGAL. Identitas atau password salah: 401 TIDAK_TERAUTENTIKASI dengan pesan yang sama untuk keduanya. Setelah 3 kali gagal: 429 TERLALU_BANYAK_PERMINTAAN selama 15 menit. | Kamus, keputusan tim |
 | Ganti password: `sandi_lama`, `sandi_baru` | Keduanya wajib diisi. `sandi_baru` minimal 8 karakter dan berbeda dari `sandi_lama`. `sandi_lama` harus cocok. | 422 VALIDASI_GAGAL | Kamus, usulan tim |
 | CSV mahasiswa: file | File CSV yang dapat dibaca dengan header `nrp,nama,email,angkatan`. | File rusak atau kosong: 400 PERMINTAAN_RUSAK. Header tidak sesuai: 422 VALIDASI_GAGAL. | Modul (M2-01) |
 | CSV mahasiswa: setiap baris | `nrp` 10 digit, `nama` 1–100 karakter, `email` berformat email, `angkatan` berupa tahun 4 digit. NRP yang sudah ada dengan nama atau email berbeda dianggap gagal. NRP yang sama dengan data sama dilewati (tidak menambah data). | 200 dengan laporan impor; baris yang gagal dicantumkan di `gagal` beserta nomor baris dan alasannya. | Modul (M2-01) |
