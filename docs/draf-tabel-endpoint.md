@@ -1,5 +1,7 @@
 # Draf daftar tabel dan endpoint — Tim 2-A
 
+> **Catatan revisi (27 Nov 2026):** draf ini sudah usang untuk bagian evaluasi. Setelah review dosen, evaluasi dilakukan oleh koordinator (dosen koordinator atau asdos), bukan antar-anggota, dan ada tabel `koordinator` baru. Acuan terbaru: `openapi.yaml`, `docs/e3-kontrak-api.md`, dan bagian E2 proposal.
+
 > **DRAF** (Minggu, 22 Nov 2026). Dipakai untuk E2, E3, E4, E5, E6, E9, F, dan `openapi.yaml`.
 > Sumber: Modul 2 bagian 3–5, rekaman wawancara 20 Nov, dan bagian 4 dokumen pembagian tugas.
 > Sudah dicocokkan dengan **Kamus Data Bersama** (folder dosen): nrp 10 digit, kode_kelompok `CP-<periode>-nn`, periode `TTTT-S`, login menggunakan NRP/kode_dosen, path diawali `/api/v1`. Daftar endpoint final ada di `docs/e3-kontrak-api.md`.
