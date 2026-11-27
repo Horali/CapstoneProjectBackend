@@ -44,7 +44,7 @@ paths:
   /api/v1/auth/login:
     post:
       tags: [dasar]
-      summary: Login dengan NRP atau kode_dosen dan password
+      summary: Login dengan NRP, kode_dosen, atau kode_koordinator dan password
       operationId: login
       security: []
       x-kebutuhan: BASE-01
@@ -676,98 +676,110 @@ paths:
       - $ref: '#/components/parameters/IdPutaran'
     get:
       tags: [evaluasi]
-      summary: Daftar anggota yang harus dinilai oleh mahasiswa yang login
+      summary: Daftar mahasiswa yang dinilai, beserta nilai dari koordinator yang login (revisi dosen)
+      description: Hanya mahasiswa dari kelompok yang sudah terbit pada periode putaran. Penilai adalah koordinator (dosen koordinator atau asdos).
       operationId: formulirEvaluasi
       x-kebutuhan: M2-11
-      x-peran: [mahasiswa]
+      x-peran: [koordinator]
+      parameters:
+        - name: kode_kelompok
+          in: query
+          schema: { type: string, pattern: '^CP-\d{4}-[12]-\d{2}$' }
       responses:
         '200':
-          description: Anggota kelompok selain diri sendiri
+          description: Daftar mahasiswa dan nilai dari penilai ini (null bila belum dinilai)
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   putaran: { $ref: '#/components/schemas/PutaranEvaluasi' }
-                  target:
+                  mahasiswa:
                     type: array
-                    items: { $ref: '#/components/schemas/AnggotaRingkas' }
+                    items:
+                      type: object
+                      properties:
+                        nrp: { type: string }
+                        nama: { type: string }
+                        kode_kelompok: { type: string }
+                        nilai_saya:
+                          nullable: true
+                          allOf: [ { $ref: '#/components/schemas/EvaluasiMasukan' } ]
         '401': { $ref: '#/components/responses/TidakTerautentikasi' }
         '403': { $ref: '#/components/responses/Dilarang' }
         '404': { $ref: '#/components/responses/TidakDitemukan' }
         '409': { $ref: '#/components/responses/PutaranDitutup' }
 
-  /api/v1/putaran-evaluasi/{id}/evaluasi-saya:
+  /api/v1/putaran-evaluasi/{id}/evaluasi/{nrp}:
     parameters:
       - $ref: '#/components/parameters/IdPutaran'
+      - name: nrp
+        in: path
+        required: true
+        schema: { type: string, pattern: '^\d{10}$' }
     put:
       tags: [evaluasi]
-      summary: Mengirim evaluasi untuk semua anggota lain sekaligus (boleh dikirim ulang selama putaran terbuka)
-      operationId: kirimEvaluasi
+      summary: Koordinator menilai satu mahasiswa (boleh dikirim ulang selama putaran terbuka)
+      description: Satu evaluasi per koordinator per mahasiswa per putaran; pengiriman ulang menimpa nilai sebelumnya.
+      operationId: simpanEvaluasi
       x-kebutuhan: M2-11
-      x-peran: [mahasiswa]
+      x-peran: [koordinator]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [evaluasi]
-              properties:
-                evaluasi:
-                  type: array
-                  minItems: 1
-                  items: { $ref: '#/components/schemas/EvaluasiMasukan' }
+            schema: { $ref: '#/components/schemas/EvaluasiMasukan' }
       responses:
         '200':
           description: Evaluasi tersimpan
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  jumlah_dinilai: { type: integer }
+              schema: { $ref: '#/components/schemas/EvaluasiMasukan' }
         '401': { $ref: '#/components/responses/TidakTerautentikasi' }
         '403': { $ref: '#/components/responses/Dilarang' }
-        '404': { $ref: '#/components/responses/TidakDitemukan' }
+        '404':
+          description: Putaran tidak ada, atau mahasiswa bukan anggota kelompok terbit pada periode putaran
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '422': { $ref: '#/components/responses/ValidasiGagal' }
         '409': { $ref: '#/components/responses/PutaranDitutup' }
 
-  /api/v1/putaran-evaluasi/{id}/ringkasan-saya:
+  /api/v1/putaran-evaluasi/{id}/hasil-saya:
     parameters:
       - $ref: '#/components/parameters/IdPutaran'
     get:
       tags: [evaluasi]
-      summary: Ringkasan evaluasi diri sendiri (tanpa identitas penilai)
-      operationId: ringkasanSaya
+      summary: Hasil evaluasi diri sendiri (tanpa identitas penilai)
+      operationId: hasilSaya
       x-kebutuhan: M2-12
       x-peran: [mahasiswa]
       responses:
         '200':
-          description: Rata-rata per kriteria dan komentar anonim
+          description: Rata-rata per kriteria dari semua koordinator yang menilai, dan komentar tanpa identitas penilai
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/RingkasanEvaluasi' }
+              schema: { $ref: '#/components/schemas/HasilEvaluasi' }
         '401': { $ref: '#/components/responses/TidakTerautentikasi' }
         '403': { $ref: '#/components/responses/Dilarang' }
         '404': { $ref: '#/components/responses/TidakDitemukan' }
         '409':
-          description: RINGKASAN_BELUM_TERSEDIA (putaran belum ditutup atau penilai kurang dari 2)
+          description: HASIL_BELUM_TERSEDIA (putaran belum ditutup atau mahasiswa belum dinilai)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
               example:
-                error: { kode: RINGKASAN_BELUM_TERSEDIA, pesan: Ringkasan tersedia setelah putaran ditutup dan minimal 2 penilai }
+                error: { kode: HASIL_BELUM_TERSEDIA, pesan: Hasil evaluasi tersedia setelah putaran ditutup }
 
   /api/v1/putaran-evaluasi/{id}/rekap:
     parameters:
       - $ref: '#/components/parameters/IdPutaran'
     get:
       tags: [evaluasi]
-      summary: Rekap evaluasi per anggota, termasuk yang belum mengisi dan penanda timpang
-      description: Koordinator melihat semua kelompok; dosen hanya kelompok bimbingannya.
+      summary: Rekap evaluasi per mahasiswa, termasuk mahasiswa yang belum dinilai
+      description: Koordinator melihat semua kelompok; dosen hanya kelompok bimbingannya. Identitas penilai boleh tampil untuk kedua peran ini.
       operationId: rekapEvaluasi
-      x-kebutuhan: M2-13, M2-15
+      x-kebutuhan: M2-13
       x-peran: [koordinator, dosen]
       parameters:
         - name: kode_kelompok
@@ -911,7 +923,7 @@ components:
       type: object
       required: [identitas, sandi]
       properties:
-        identitas: { type: string, description: NRP atau kode_dosen }
+        identitas: { type: string, description: 'NRP (mahasiswa), kode_dosen (dosen), atau kode_koordinator (koordinator: dosen koordinator atau asdos)' }
         sandi: { type: string }
 
     LoginResponse:
@@ -1031,7 +1043,7 @@ components:
         nrp: { type: string }
         dari_kelompok: { type: string, nullable: true }
         ke_kelompok: { type: string, nullable: true }
-        oleh: { type: string, description: identitas koordinator }
+        oleh: { type: string, description: kode_koordinator }
         alasan: { type: string, nullable: true }
 
     PutaranEvaluasi:
@@ -1045,15 +1057,14 @@ components:
 
     EvaluasiMasukan:
       type: object
-      required: [target_nrp, kontribusi_teknis, komunikasi, tanggung_jawab]
+      required: [kontribusi_teknis, komunikasi, tanggung_jawab]
       properties:
-        target_nrp: { type: string, pattern: '^\d{10}$' }
         kontribusi_teknis: { type: integer, minimum: 1, maximum: 5 }
         komunikasi: { type: integer, minimum: 1, maximum: 5 }
         tanggung_jawab: { type: integer, minimum: 1, maximum: 5 }
         komentar: { type: string, maxLength: 300 }
 
-    RingkasanEvaluasi:
+    HasilEvaluasi:
       type: object
       description: Tidak pernah memuat identitas penilai
       properties:
@@ -1072,11 +1083,10 @@ components:
       type: object
       properties:
         kode_kelompok: { type: string }
-        belum_mengisi:
+        belum_dinilai:
           type: array
-          items: { type: string, description: nrp }
-        kontribusi_timpang: { type: boolean, description: 'Selisih rata-rata antar-anggota lebih dari 1,0' }
-        anggota:
+          items: { type: string, description: nrp mahasiswa yang belum dinilai koordinator mana pun }
+        mahasiswa:
           type: array
           items:
             type: object
@@ -1095,7 +1105,8 @@ components:
                 items:
                   type: object
                   properties:
-                    penilai_nrp: { type: string }
+                    penilai: { type: string, description: kode_koordinator }
+                    nama_penilai: { type: string }
                     kontribusi_teknis: { type: integer }
                     komunikasi: { type: integer }
                     tanggung_jawab: { type: integer }
